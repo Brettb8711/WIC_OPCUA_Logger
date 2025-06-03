@@ -1,0 +1,4 @@
+# requirements.txt
+opcua
+psycopg2-binary
+PyQt5
