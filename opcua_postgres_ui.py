@@ -80,6 +80,7 @@ class AddConnectionDialog(QDialog):
             self.tested = False
 
     def load_nodes(self):
+        # Check if the connection has been tested
         if not self.tested:
             QMessageBox.warning(self, 'Test Required', 'Please test the connection first.')
             return
@@ -101,10 +102,35 @@ class AddConnectionDialog(QDialog):
 
     def accept(self):
         self.selected_nodes = [item.text().split('(')[-1][:-2] for item in self.node_list.selectedItems()]
+        # Save the connection details to the config file
+        self.save_connection()
         if not self.selected_nodes:
             QMessageBox.warning(self, 'Selection Error', 'Please select at least one node.')
             return
         super().accept()
+
+    def save_connection(self):
+        # Save the connection details to the config file
+        display_name = self.display_name_input.text().strip()
+        url = self.server_url_input.text().strip()
+        refresh_rate = self.refresh_rate_input.value()
+        config = config_service.load_config()
+        opcua_servers = config.get('opcua_servers', [])
+        for server in opcua_servers:
+            if server.get('display_name') == display_name:
+                server['url'] = url
+                server['refresh_rate'] = refresh_rate
+                server['nodes'] = self.selected_nodes
+                break
+        else:
+            opcua_servers.append({
+                'display_name': display_name,
+                'url': url,
+                'refresh_rate': refresh_rate,
+                'nodes': self.selected_nodes
+            })
+        config['opcua_servers'] = opcua_servers
+        config_service.save_config(config)
 
 class AddDatabaseDialog(QDialog):
     def __init__(self, parent=None):
@@ -378,6 +404,10 @@ class OPCUAClientUI(QWidget):
                         if isinstance(value, ExtensionObject):
                             struct_instance = StructClass(value.Body)
                             value = struct_instance.as_dict()
+                        else:
+                            # It is an array of ExtensionObjects
+                            value = [StructClass(item.Body).as_dict() for item in value if isinstance(item, ExtensionObject)]
+                            value = str(value)
                 
                 
                 server_info['pg_service'].insert_data(node_id, value, server_info['display_name'])

@@ -1,0 +1,20 @@
+{
+  "database": {
+    "host": "localhost",
+    "dbname": "WICMachineData",
+    "user": "postgres",
+    "password": "enter password:"
+  },
+  "opcua_servers": [
+    {
+      "display_name": "Flat Sheet Laser",
+      "url": "opc.tcp://172.16.1.192:56000",
+      "refresh_rate": 10,
+      "nodes": [
+        "ns=2;s=Work.CurrentPlans",
+        "ns=2;s=Work.CurrentRun",
+        "ns=2;s=Work.CurrentRunPart"
+      ]
+    }
+  ]
+}
