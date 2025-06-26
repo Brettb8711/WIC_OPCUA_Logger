@@ -294,7 +294,9 @@ class OPCUAClientUI(QWidget):
                     'refresh_rate': refresh_rate,
                     'nodes': nodes,
                     'timer': timer,
-                    'url': url
+                    'url': url,
+                    'disconnected': False,
+                    'retry_timer': None  
                 }
                 timer.timeout.connect(lambda s=server_info: self.update_node_values_multi(s))
                 timer.start(refresh_rate * 1000)
@@ -421,9 +423,45 @@ class OPCUAClientUI(QWidget):
                         #node['node_display_name'] = self.client.get_node(node_id).get_browse_name().Name  # Store display name
 
                 self.update_node_table()
+                server_info['disconnected'] = False
             except Exception as e:
+                print(f"Error reading from server {server_info['display_name']}: {e}")
+                if not server_info.get('disconnected', False):
+                    server_info['disconnected'] = True
+                    self.handle_server_disconnect(server_info)
                 # Optionally show error in UI
                 pass
+    def handle_server_disconnect(self, server_info):
+        # Stop the regular polling timer
+        server_info['timer'].stop()
+        print(f"Server {server_info['display_name']} disconnected. Will retry in 5 minutes.")
+
+        # Start a retry timer if not already started
+        if not server_info.get('retry_timer'):
+            retry_timer = QTimer()
+            retry_timer.setSingleShot(False)
+            retry_timer.timeout.connect(lambda: self.try_reconnect_server(server_info))
+            retry_timer.start(5 * 60 * 1000)  # 5 minutes
+            server_info['retry_timer'] = retry_timer
+
+    def try_reconnect_server(self, server_info):
+        try:
+            print(f"Attempting to reconnect to {server_info['display_name']}...")
+            server_info['opc_service'].connect()
+            # Optionally reload nodes if needed
+            nodes = server_info['opc_service'].get_nodes()
+            server_info['nodes'] = [n["nodeid"] for n in nodes]
+            # Restart the regular polling timer
+            server_info['timer'].start(server_info['refresh_rate'] * 1000)
+            # Stop the retry timer
+            if server_info.get('retry_timer'):
+                server_info['retry_timer'].stop()
+                server_info['retry_timer'] = None
+            server_info['disconnected'] = False
+            print(f"Reconnected to {server_info['display_name']}.")
+        except Exception as e:
+            print(f"Reconnect failed for {server_info['display_name']}: {e}")
+            # Will retry again in 5 minutes automatically
 
     def update_node_table(self):
         filter_name = self.server_filter.currentText()
